@@ -1,69 +1,108 @@
 package relay_test
 
 import (
-	"github.com/moiji-mobile/redisrelay/relay"
+	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/moiji-mobile/redisrelay/relay"
 )
 
 func newReader(str string) *relay.Reader {
 	return relay.NewReader(strings.NewReader(str))
 }
 
-
-func checkResult(inp string, err error, cmd []byte, t *testing.T) {
+func parseCommand(inp string, t *testing.T) []interface{} {
+	r := newReader(inp)
+	cmd, err := r.ParseCommand()
 	if err != nil {
-		t.Errorf("Parsing resulted in error: %v", err)
+		t.Errorf("Failed with err=%v on inp=%v\n", err, inp)
 	}
-	if string(cmd) != inp {
-		t.Errorf("Strings don't match: '%v' vs. '%v'", string(cmd), inp)
+	return cmd
+}
+
+func parseData(inp string, t *testing.T) interface{} {
+	r := newReader(inp)
+	cmd, err := r.ParseData()
+	if err != nil {
+		t.Errorf("Failed with err=%v on inp=%v\n", err, inp)
+	}
+	return cmd
+}
+
+func testRoundTrip(cmd interface{}, inp string, t *testing.T) {
+	b := bytes.NewBuffer(make([]byte, 0, len(inp)))
+	w := relay.NewWriter(b)
+	err := w.Write(cmd)
+	w.BufioWriter.Flush()
+	if err != nil {
+		t.Errorf("Unpexted error: %v\n", err)
+	}
+	res := string(b.Bytes())
+	if inp != res {
+		t.Errorf("Wanted '%v' but got '%v'", inp, res)
 	}
 }
 
-
-func roundTripTestScanCommand(inp string, t *testing.T) {
-	r := newReader(inp)
-	cmd, err := r.ScanCommand()
-	checkResult(inp, err, cmd, t)
-}
-
-func roundTripTestScanData(inp string, t *testing.T) {
-	r := newReader(inp)
-	cmd, err := r.ScanData()
-	checkResult(inp, err, cmd, t)
-}
-
-func TestScanCommand_ArrayWithBulkString(t *testing.T) {
+func TestParseCommand_ArrayWithBulkString(t *testing.T) {
 	inp := "*2\r\n$4\r\nLLEN\r\n$6\r\nmylist\r\n"
-	roundTripTestScanCommand(inp, t)
+	res := parseCommand(inp, t)
+	if len(res) != 2 {
+		t.Errorf("Expected a length of two but got %v\n", len(res))
+	}
+	if string(*res[0].(*[]byte)) != "LLEN" {
+		t.Errorf("Expected LLEN but got %v\n", res[0].(*[]byte))
+	}
+	if string(*res[1].(*[]byte)) != "mylist" {
+		t.Errorf("Expected nmylist but got %v\n", res[1].(*[]byte))
+	}
+	testRoundTrip(res, inp, t)
 }
 
-func TestScanCommand_ArrayEmpty(t *testing.T) {
+func TestParseCommand_ArrayEmpty(t *testing.T) {
 	inp := "*0\r\n"
-	roundTripTestScanCommand(inp, t)
+	res := parseCommand(inp, t)
+	testRoundTrip(res, inp, t)
 }
 
-func TestScanCommand_ArrayMixed(t *testing.T) {
+func TestParseCommand_ArrayMixed(t *testing.T) {
 	inp := "*5\r\n:1\r\n:2\r\n:3\r\n:4\r\n$6\r\nfoobar\r\n"
-	roundTripTestScanCommand(inp, t)
+	res := parseCommand(inp, t)
+	testRoundTrip(res, inp, t)
 }
 
-func TestScanData_BulkStringNull(t *testing.T) {
+func TestParseData_BulkStringNull(t *testing.T) {
 	inp := "$-1\r\n"
-	roundTripTestScanData(inp, t)
+	res := parseData(inp, t)
+	if res.(*[]byte) != nil {
+		t.Errorf("Wanted null string but got: %v %v", res, res == nil)
+	}
+	testRoundTrip(res, inp, t)
 }
 
-func TestScanData_BulkStringEmpty(t *testing.T) {
+func TestParseData_BulkStringEmpty(t *testing.T) {
 	inp := "$0\r\n\r\n"
-	roundTripTestScanData(inp, t)
+	res := parseData(inp, t)
+	if string(*res.(*[]byte)) != "" {
+		t.Errorf("Wanted empty string but got: %v %v", res, res == nil)
+	}
+	testRoundTrip(res, inp, t)
 }
 
-func TestScanData_SimpleString(t *testing.T) {
+func TestParseData_SimpleString(t *testing.T) {
 	inp := "+OK\r\n"
-	roundTripTestScanData(inp, t)
+	res := parseData(inp, t)
+	if res.(relay.SimpleString).String != "OK" {
+		t.Errorf("Wanted OK string but got: %v", string(res.([]byte)))
+	}
+	testRoundTrip(res, inp, t)
 }
 
-func TestScanData_Error(t *testing.T) {
+func TestParseData_Error(t *testing.T) {
 	inp := "-Error message\r\n"
-	roundTripTestScanData(inp, t)
+	res := parseData(inp, t)
+	if res.(error).Error() != "Error message" {
+		t.Errorf("Wanted 'Error message' string but got: %v", string(res.([]byte)))
+	}
+	testRoundTrip(res, inp, t)
 }

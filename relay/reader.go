@@ -2,6 +2,7 @@ package relay
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -19,12 +20,11 @@ func (r *Reader) ScanLine() ([]byte, error) {
 	}
 
 	// TODO(holgerf): Improve error handling.
-	fmt.Printf("Got err '%v' %v\n", string(line), err)
 	return nil, err
 }
 
-// Scan an array.
-func (r *Reader) ScanArray() ([]byte, error) {
+// Parse an array.
+func (r *Reader) ParseArray() ([]interface{}, error) {
 	line, err := r.ScanLine()
 
 	if err != nil {
@@ -37,64 +37,69 @@ func (r *Reader) ScanArray() ([]byte, error) {
 		return nil, fmt.Errorf("Not an array.")
 	}
 
-	return r.ScanArrayElements(line)
+	return r.ParseArrayElements(line)
 }
 
-func (r *Reader) ScanArrayElements(line []byte) ([]byte, error) {
+func (r *Reader) ParseArrayElements(line []byte) ([]interface{}, error) {
 	// How many entries to parse?
 	l, err := strconv.ParseInt(string(line[1:]), 10, 64)
 	if err != nil {
 		return nil, err
 	}
 
-	line = append(line, "\r\n"...)
+	res := make([]interface{}, 0, l)
 	// Collect all of the lines.
 	for i := int64(0); i < l; i++ {
-		extra, err := r.ScanData()
+		extra, err := r.ParseData()
 		if err != nil {
 			return nil, err
 		}
-		line = append(line, extra...)
+		res = append(res, extra)
 	}
-	return line, nil
+	return res, nil
 }
 
-func (r *Reader) ScanSimpleString(line []byte) ([]byte, error) {
-	return append(line, "\r\n"...), nil
+func (r *Reader) ParseSimpleString(line []byte) (SimpleString, error) {
+	return SimpleString{string(line[1:])}, nil
 }
 
-func (r *Reader) ScanIntegers(line []byte) ([]byte, error) {
-	_, err := strconv.ParseInt(string(line[1:]), 10, 64)
+func (r *Reader) ParseSimpleError(line []byte) (error, error) {
+	return errors.New(string(line[1:])), nil
+}
+
+func (r *Reader) ParseIntegers(line []byte) (int64, error) {
+	num, err := strconv.ParseInt(string(line[1:]), 10, 64)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	return append(line, "\r\n"...), nil
+	return num, nil
 }
 
-func (r *Reader) ScanBulkString(line []byte) ([]byte, error) {
+func (r *Reader) ParseBulkString(line []byte) (*[]byte, error) {
 	l, err := strconv.ParseInt(string(line[1:]), 10, 64)
 	if err != nil {
 		return nil, err
 	}
 
-	// $-1\r\n indicates a NULL string.
 	if l < 0 {
-		line = append(line, "\r\n"...)
-		return line, nil
+		return nil, nil
 	}
 
-	buf := make([]byte, l+2)
+	buf := make([]byte, l)
 	_, err = io.ReadFull(r.BufioReader, buf)
 	if err != nil {
 		return nil, err
 	}
+	// Pop the \r\n that should be lingering around.
+	_, err = r.ScanLine()
+	if err != nil {
+		return nil, err
+	}
 
-	line = append(line, "\r\n"...)
-	line = append(line, buf...)
-	return line, nil
+	return &buf, nil
 }
 
-func (r *Reader) ScanData() ([]byte, error) {
+func (r *Reader) ParseData() (interface{}, error) {
 	line, err := r.ScanLine()
 
 	if err != nil {
@@ -103,23 +108,23 @@ func (r *Reader) ScanData() ([]byte, error) {
 
 	switch line[0] {
 	case '+':
-		return r.ScanSimpleString(line)
+		return r.ParseSimpleString(line)
 	case '-':
-		return r.ScanSimpleString(line)
+		return r.ParseSimpleError(line)
 	case ':':
-		return r.ScanIntegers(line)
+		return r.ParseIntegers(line)
 	case '$':
-		return r.ScanBulkString(line)
+		return r.ParseBulkString(line)
 	case '*':
-		return r.ScanArrayElements(line)
+		return r.ParseArrayElements(line)
 	default:
 		return nil, fmt.Errorf("Can't parse data: %s", line)
 	}
 }
 
 // Parse a single a Command. It must be an array.
-func (r *Reader) ScanCommand() ([]byte, error) {
-	return r.ScanArray()
+func (r *Reader) ParseCommand() ([]interface{}, error) {
+	return r.ParseArray()
 }
 
 func NewReader(conn io.Reader) *Reader {
