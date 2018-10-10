@@ -10,6 +10,20 @@ type Server struct {
 	logger *zap.Logger
 }
 
+// A pair of reader/writer for a downstream connection
+type DownStream struct {
+	reader *Reader
+	writer *Writer
+}
+
+// A single client.
+type Client struct {
+	server *Server
+	reader *Reader
+	writer *Writer
+	streams []DownStream
+}
+
 func NewServer(opt *ServerOptions) (*Server, error) {
 	opt.init()
 
@@ -23,47 +37,66 @@ func NewServer(opt *ServerOptions) (*Server, error) {
 	return &s, nil
 }
 
+func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (interface{}, error) {
+	remote := client.streams[0]
+
+	// Write it down stream
+	err := remote.writer.Write(cmd)
+	if err != nil {
+		logger.Error("Can't forward command", zap.Error(err))
+		return nil, err
+	}
+	remote.writer.Flush()
+
+	// Get the response
+	res, err := remote.reader.ParseData()
+	if err != nil {
+		logger.Error("Can't read response", zap.Error(err))
+		return nil, err
+	}
+	return res, err
+}
+
 func handleConnection(conn net.Conn, s *Server) {
 	defer conn.Close()
 
-	reader := NewReader(conn, s.logger)
-	writer := NewWriter(conn)
+	client := Client{
+		server: s,
+		reader: NewReader(conn, s.logger),
+		writer: NewWriter(conn)}
 
-	remote, err := net.Dial("tcp", "localhost:6379")
+	remoteConn, err := net.Dial("tcp", "localhost:6379")
 	if err != nil {
 		s.logger.Error("Can't connect to real Redis", zap.Error(err))
 		return
 	}
-	defer remote.Close()
-	remoteReader := NewReader(remote, s.logger)
-	remoteWriter := NewWriter(remote)
+	defer remoteConn.Close()
+	remote := DownStream{
+		reader: NewReader(remoteConn, s.logger),
+		writer: NewWriter(remoteConn)}
+	client.streams = append(make([]DownStream, 0), remote)
 
 	for {
-		cmd, err := reader.ParseCommand()
+		// Get the command
+		cmd, err := client.reader.ParseCommand()
 		if err != nil {
 			s.logger.Error("Can't parse command", zap.Error(err))
 			return
 		}
 
-		err = remoteWriter.Write(cmd)
+		res, err := forwardDownstream(&client, cmd, s.logger)
 		if err != nil {
-			s.logger.Error("Can't forward command", zap.Error(err))
-			return
-		}
-		remoteWriter.Flush()
-
-		res, err := remoteReader.ParseData()
-		if err != nil {
-			s.logger.Error("Can't response", zap.Error(err))
+			s.logger.Error("Can't parse command", zap.Error(err))
 			return
 		}
 
-		err = writer.Write(res)
+		// Write the response
+		err = client.writer.Write(res)
 		if err != nil {
 			s.logger.Error("Can't forward response", zap.Error(err))
 			return
 		}
-		writer.Flush()
+		client.writer.Flush()
 	}
 }
 
