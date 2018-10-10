@@ -6,10 +6,12 @@ import (
 	"testing"
 
 	"github.com/moiji-mobile/redisrelay/relay"
+	"go.uber.org/zap"
 )
 
 func newReader(str string) *relay.Reader {
-	return relay.NewReader(strings.NewReader(str))
+	logger, _ := zap.NewDevelopment()
+	return relay.NewReader(strings.NewReader(str), logger)
 }
 
 func parseCommand(inp string, t *testing.T) []interface{} {

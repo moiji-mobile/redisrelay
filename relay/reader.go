@@ -6,20 +6,21 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"go.uber.org/zap"
 )
 
 type Reader struct {
-	BufioReader *bufio.Reader
+	bufioReader *bufio.Reader
+	logger *zap.Logger
 }
 
 func (r *Reader) ScanLine() ([]byte, error) {
-	line, _, err := r.BufioReader.ReadLine()
+	line, _, err := r.bufioReader.ReadLine()
 
 	if err == nil {
 		return line, err
 	}
 
-	// TODO(holgerf): Improve error handling.
 	return nil, err
 }
 
@@ -28,7 +29,7 @@ func (r *Reader) ParseArray() ([]interface{}, error) {
 	line, err := r.ScanLine()
 
 	if err != nil {
-		// TODO(holgerf):
+		r.logger.Error("Failed to ReadLine", zap.Error(err))
 		return nil, err
 	}
 
@@ -44,6 +45,7 @@ func (r *Reader) ParseArrayElements(line []byte) ([]interface{}, error) {
 	// How many entries to parse?
 	l, err := strconv.ParseInt(string(line[1:]), 10, 64)
 	if err != nil {
+		r.logger.Error("Failed to ParseInt", zap.Error(err), zap.ByteString("line", line[1:]))
 		return nil, err
 	}
 
@@ -52,6 +54,7 @@ func (r *Reader) ParseArrayElements(line []byte) ([]interface{}, error) {
 	for i := int64(0); i < l; i++ {
 		extra, err := r.ParseData()
 		if err != nil {
+			r.logger.Error("Failed to parse element", zap.Error(err))
 			return nil, err
 		}
 		res = append(res, extra)
@@ -70,6 +73,7 @@ func (r *Reader) ParseSimpleError(line []byte) (error, error) {
 func (r *Reader) ParseIntegers(line []byte) (int64, error) {
 	num, err := strconv.ParseInt(string(line[1:]), 10, 64)
 	if err != nil {
+		r.logger.Error("Failed to parse int", zap.Error(err), zap.ByteString("line", line[1:]))
 		return 0, err
 	}
 	return num, nil
@@ -78,6 +82,7 @@ func (r *Reader) ParseIntegers(line []byte) (int64, error) {
 func (r *Reader) ParseBulkString(line []byte) (*[]byte, error) {
 	l, err := strconv.ParseInt(string(line[1:]), 10, 64)
 	if err != nil {
+		r.logger.Error("Failed to parse int", zap.Error(err), zap.ByteString("line", line[1:]))
 		return nil, err
 	}
 
@@ -86,13 +91,15 @@ func (r *Reader) ParseBulkString(line []byte) (*[]byte, error) {
 	}
 
 	buf := make([]byte, l)
-	_, err = io.ReadFull(r.BufioReader, buf)
+	_, err = io.ReadFull(r.bufioReader, buf)
 	if err != nil {
+		r.logger.Error("Failed to read", zap.Error(err))
 		return nil, err
 	}
 	// Pop the \r\n that should be lingering around.
 	_, err = r.ScanLine()
 	if err != nil {
+		r.logger.Error("Failed to ScanLine", zap.Error(err))
 		return nil, err
 	}
 
@@ -127,7 +134,8 @@ func (r *Reader) ParseCommand() ([]interface{}, error) {
 	return r.ParseArray()
 }
 
-func NewReader(conn io.Reader) *Reader {
-	r := Reader{BufioReader: bufio.NewReader(conn)}
+func NewReader(conn io.Reader, logger *zap.Logger) *Reader {
+	r := Reader{bufioReader: bufio.NewReader(conn)}
+	r.logger = logger
 	return &r
 }

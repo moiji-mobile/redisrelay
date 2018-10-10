@@ -12,8 +12,15 @@ type Writer struct {
 }
 
 func (w *Writer) writeArray(vals []interface{}) error {
-	w.BufioWriter.WriteByte('*')
-	w.writeInt(int64(len(vals)))
+	err := w.BufioWriter.WriteByte('*')
+	if err != nil {
+		return err
+	}
+
+	err = w.writeInt(int64(len(vals)))
+	if err != nil {
+		return err
+	}
 
 	for _, val := range vals {
 		err := w.Write(val)
@@ -25,10 +32,16 @@ func (w *Writer) writeArray(vals []interface{}) error {
 }
 
 func (w *Writer) writeErrorString(val error) error {
-	w.BufioWriter.WriteByte('-')
-	w.BufioWriter.WriteString(val.Error())
+	err := w.BufioWriter.WriteByte('-')
+	if err != nil {
+		return err
+	}
+
+	_, err = w.BufioWriter.WriteString(val.Error())
+	if err != nil {
+		return err
+	}
 	return w.crlf()
-	return nil
 }
 
 func (w *Writer) writeInt(val int64) error {
@@ -41,14 +54,21 @@ func (w *Writer) writeInt(val int64) error {
 }
 
 func (w *Writer) writeBulkString(val *[]byte) error {
-	w.BufioWriter.WriteByte('$')
+	err := w.BufioWriter.WriteByte('$')
+	if err != nil {
+		return err
+	}
 
 	if val == nil {
 		return w.writeInt(int64(-1))
 	}
 
-	w.writeInt(int64(len(*val)))
-	_, err := w.BufioWriter.Write(*val)
+	err = w.writeInt(int64(len(*val)))
+	if err != nil {
+		return err
+	}
+
+	_, err = w.BufioWriter.Write(*val)
 	if err != nil {
 		return err
 	}
@@ -56,8 +76,14 @@ func (w *Writer) writeBulkString(val *[]byte) error {
 }
 
 func (w *Writer) writeSimpleString(val SimpleString) error {
-	w.BufioWriter.WriteByte('+')
-	w.BufioWriter.WriteString(val.String)
+	err := w.BufioWriter.WriteByte('+')
+	if err != nil {
+		return err
+	}
+	_, err = w.BufioWriter.WriteString(val.String)
+	if err != nil {
+		return err
+	}
 	return w.crlf()
 }
 
@@ -66,9 +92,7 @@ func (w *Writer) crlf() (err error) {
 	return
 }
 
-func (w *Writer) Write(val interface{}) error {
-	var err error
-
+func (w *Writer) Write(val interface{}) (err error) {
 	switch val.(type) {
 	case []interface{}:
 		err = w.writeArray(val.([]interface{}))
@@ -94,7 +118,7 @@ func (w *Writer) Write(val interface{}) error {
 		err = fmt.Errorf("Type '%T' not handled.", val)
 	}
 
-	return err
+	return
 }
 
 func (w *Writer) Flush() error {
