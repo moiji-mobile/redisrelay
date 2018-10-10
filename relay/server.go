@@ -57,6 +57,31 @@ func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (int
 	return res, err
 }
 
+func (client *Client) forwardCommands() {
+	for {
+		// Get the command
+		cmd, err := client.reader.ParseCommand()
+		if err != nil {
+			client.server.logger.Error("Can't parse command", zap.Error(err))
+			return
+		}
+
+		res, err := forwardDownstream(client, cmd, client.server.logger)
+		if err != nil {
+			client.server.logger.Error("Can't parse command", zap.Error(err))
+			return
+		}
+
+		// Write the response
+		err = client.writer.Write(res)
+		if err != nil {
+			client.server.logger.Error("Can't forward response", zap.Error(err))
+			return
+		}
+		client.writer.Flush()
+	}
+}
+
 func handleConnection(conn net.Conn, s *Server) {
 	defer conn.Close()
 
@@ -76,28 +101,7 @@ func handleConnection(conn net.Conn, s *Server) {
 		writer: NewWriter(remoteConn)}
 	client.streams = append(make([]DownStream, 0), remote)
 
-	for {
-		// Get the command
-		cmd, err := client.reader.ParseCommand()
-		if err != nil {
-			s.logger.Error("Can't parse command", zap.Error(err))
-			return
-		}
-
-		res, err := forwardDownstream(&client, cmd, s.logger)
-		if err != nil {
-			s.logger.Error("Can't parse command", zap.Error(err))
-			return
-		}
-
-		// Write the response
-		err = client.writer.Write(res)
-		if err != nil {
-			s.logger.Error("Can't forward response", zap.Error(err))
-			return
-		}
-		client.writer.Flush()
-	}
+	client.forwardCommands()
 }
 
 func (s *Server) Run() {
