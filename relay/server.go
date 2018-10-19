@@ -12,9 +12,19 @@ type Server struct {
 }
 
 // A pair of reader/writer for a downstream connection
-type DownStream struct {
+type downStream struct {
+	conn   net.Conn
 	reader *Reader
 	writer *Writer
+}
+
+type remote struct {
+	network string
+	address string
+	logger  *zap.Logger
+
+	// Internal stream handling
+	streams []*downStream
 }
 
 // A single client.
@@ -22,7 +32,7 @@ type Client struct {
 	server  *Server
 	reader  *Reader
 	writer  *Writer
-	streams []DownStream
+	remotes []remote
 }
 
 // A result coming from downstream connection
@@ -44,17 +54,58 @@ func NewServer(opt *ServerOptions) (*Server, error) {
 	return &s, nil
 }
 
-func (remote *DownStream) sendReceive(cmd interface{}, logger *zap.Logger) (interface{}, error) {
+// First thing that might be connection pooling..
+func (remote *remote) getDownStream() (*downStream, error) {
+	remoteConn, err := net.Dial("tcp", "localhost:6379")
+	if err != nil {
+		remote.logger.Error("Can't connect to real Redis", zap.Error(err))
+		return nil, err
+	}
+
+	stream := &downStream{
+		conn:   remoteConn,
+		reader: NewReader(remoteConn, remote.logger),
+		writer: NewWriter(remoteConn)}
+
+	// Check the connection is working
+	res, err := stream.sendReceive([]interface{}{[]byte{'p', 'i', 'n', 'g'}, []byte{'1', '2', '3'}}, remote.logger)
+	if err != nil {
+		remote.logger.Error("Can't ping", zap.Error(err))
+		return nil, err
+	}
+	if string(*res.(*[]byte)) != "123" {
+		return nil, fmt.Errorf("Sequencing error got: '%v'", res)
+	}
+	return stream, nil
+}
+
+// Return it to the pool
+func (remote *remote) releaseDownStream(stream *downStream) {
+	// Just close it now as streams are not tracked..
+	stream.conn.Close()
+}
+
+func (remote *remote) forwardCommand(c chan<- forwardResult, cmd interface{}, logger *zap.Logger) {
+	stream, err := remote.getDownStream()
+	if err != nil {
+		c <- forwardResult{result: nil, err: err}
+	} else {
+		res, err := stream.sendReceive(cmd, logger)
+		c <- forwardResult{result: res, err: err}
+	}
+}
+
+func (stream *downStream) sendReceive(cmd interface{}, logger *zap.Logger) (interface{}, error) {
 	// Write it down stream
-	err := remote.writer.Write(cmd)
+	err := stream.writer.Write(cmd)
 	if err != nil {
 		logger.Error("Can't forward command", zap.Error(err))
 		return nil, err
 	}
-	remote.writer.Flush()
+	stream.writer.Flush()
 
 	// Get the response
-	res, err := remote.reader.ParseData()
+	res, err := stream.reader.ParseData()
 	if err != nil {
 		logger.Error("Can't read response", zap.Error(err))
 		return nil, err
@@ -62,30 +113,15 @@ func (remote *DownStream) sendReceive(cmd interface{}, logger *zap.Logger) (inte
 	return res, err
 }
 
-func (remote *DownStream) forwardCommand(c chan<- forwardResult, cmd interface{}, logger *zap.Logger) {
-	fmt.Printf("Foooo..\n")
-	res, err := remote.sendReceive([]interface{}{[]byte{'p', 'i', 'n', 'g'}, []byte{'1', '2', '3'}}, logger)
-	if err != nil {
-		logger.Error("Can't ping", zap.Error(err))
-		c <- forwardResult{result: nil, err: err}
-		return
-	}
-	if string(*res.(*[]byte)) != "123" {
-		c <- forwardResult{result: nil, err: fmt.Errorf("Sequencing error got: '%v'", res)}
-		return
-	}
-	res, err = remote.sendReceive(cmd, logger)
-	c <- forwardResult{result: res, err: err}
-}
-
 func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (interface{}, error) {
-	c := make(chan forwardResult)
+	c := make(chan forwardResult, len(client.remotes))
 
-	for _, remote := range client.streams {
+	for _, remote := range client.remotes {
 		go remote.forwardCommand(c, cmd, logger)
 	}
 
 	f := <-c
+	close(c)
 	return f.result, f.err
 }
 
@@ -122,17 +158,11 @@ func handleConnection(conn net.Conn, s *Server) {
 		reader: NewReader(conn, s.logger),
 		writer: NewWriter(conn)}
 
-	remoteConn, err := net.Dial("tcp", "localhost:6379")
-	if err != nil {
-		s.logger.Error("Can't connect to real Redis", zap.Error(err))
-		return
-	}
-	defer remoteConn.Close()
-	remote := DownStream{
-		reader: NewReader(remoteConn, s.logger),
-		writer: NewWriter(remoteConn)}
-	client.streams = append(make([]DownStream, 0), remote)
-
+	r := remote{
+		logger:  s.logger,
+		network: "tcp",
+		address: "localhost:6379"}
+	client.remotes = append(make([]remote, 0), r)
 	client.forwardCommands()
 }
 
