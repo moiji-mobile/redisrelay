@@ -2,13 +2,13 @@ package relay
 
 import (
 	"fmt"
-	"net"
 	"go.uber.org/zap"
+	"net"
 )
 
 type Server struct {
 	listener net.Listener
-	logger *zap.Logger
+	logger   *zap.Logger
 }
 
 // A pair of reader/writer for a downstream connection
@@ -19,9 +19,9 @@ type DownStream struct {
 
 // A single client.
 type Client struct {
-	server *Server
-	reader *Reader
-	writer *Writer
+	server  *Server
+	reader  *Reader
+	writer  *Writer
 	streams []DownStream
 }
 

@@ -4,14 +4,14 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
 	"strconv"
-	"go.uber.org/zap"
 )
 
 type Reader struct {
 	bufioReader *bufio.Reader
-	logger *zap.Logger
+	logger      *zap.Logger
 }
 
 func (r *Reader) ScanLine() ([]byte, error) {

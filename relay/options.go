@@ -6,7 +6,7 @@ import (
 
 type ServerOptions struct {
 	Address string // defaults to ":8081"
-	Logger *zap.Logger
+	Logger  *zap.Logger
 }
 
 func (o *ServerOptions) init() {
