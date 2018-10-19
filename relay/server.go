@@ -121,7 +121,6 @@ func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (int
 	}
 
 	f := <-c
-	close(c)
 	return f.result, f.err
 }
 
@@ -158,11 +157,14 @@ func handleConnection(conn net.Conn, s *Server) {
 		reader: NewReader(conn, s.logger),
 		writer: NewWriter(conn)}
 
-	r := remote{
-		logger:  s.logger,
-		network: "tcp",
-		address: "localhost:6379"}
-	client.remotes = append(make([]remote, 0), r)
+	client.remotes = make([]remote, 0)
+	for range []int{1,2} {
+		r := remote{
+			logger:  s.logger,
+			network: "tcp",
+			address: "localhost:6379"}
+		client.remotes = append(client.remotes, r)
+	}
 	client.forwardCommands()
 }
 
