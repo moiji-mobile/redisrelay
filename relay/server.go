@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"fmt"
 	"net"
 	"go.uber.org/zap"
 )
@@ -37,9 +38,7 @@ func NewServer(opt *ServerOptions) (*Server, error) {
 	return &s, nil
 }
 
-func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (interface{}, error) {
-	remote := client.streams[0]
-
+func (remote *DownStream) sendReceive(cmd interface{}, logger *zap.Logger) (interface{}, error) {
 	// Write it down stream
 	err := remote.writer.Write(cmd)
 	if err != nil {
@@ -55,6 +54,19 @@ func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (int
 		return nil, err
 	}
 	return res, err
+}
+
+func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (interface{}, error) {
+	remote := client.streams[0]
+	res, err := remote.sendReceive([]interface{}{[]byte{'p', 'i', 'n', 'g'}, []byte{'1', '2', '3'}}, logger)
+	if err != nil {
+		logger.Error("Can't ping", zap.Error(err))
+		return nil, err
+	}
+	if string(*res.(*[]byte)) != "123" {
+		return nil, fmt.Errorf("Sequencing error got: '%v'", res)
+	}
+	return remote.sendReceive(cmd, logger)
 }
 
 func (client *Client) forwardCommands() {
