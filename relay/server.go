@@ -25,6 +25,12 @@ type Client struct {
 	streams []DownStream
 }
 
+// A result coming from downstream connection
+type forwardResult struct {
+	result interface{}
+	err    error
+}
+
 func NewServer(opt *ServerOptions) (*Server, error) {
 	opt.init()
 
@@ -56,17 +62,31 @@ func (remote *DownStream) sendReceive(cmd interface{}, logger *zap.Logger) (inte
 	return res, err
 }
 
-func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (interface{}, error) {
-	remote := client.streams[0]
+func (remote *DownStream) forwardCommand(c chan<- forwardResult, cmd interface{}, logger *zap.Logger) {
+	fmt.Printf("Foooo..\n")
 	res, err := remote.sendReceive([]interface{}{[]byte{'p', 'i', 'n', 'g'}, []byte{'1', '2', '3'}}, logger)
 	if err != nil {
 		logger.Error("Can't ping", zap.Error(err))
-		return nil, err
+		c <- forwardResult{result: nil, err: err}
+		return
 	}
 	if string(*res.(*[]byte)) != "123" {
-		return nil, fmt.Errorf("Sequencing error got: '%v'", res)
+		c <- forwardResult{result: nil, err: fmt.Errorf("Sequencing error got: '%v'", res)}
+		return
 	}
-	return remote.sendReceive(cmd, logger)
+	res, err = remote.sendReceive(cmd, logger)
+	c <- forwardResult{result: res, err: err}
+}
+
+func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (interface{}, error) {
+	c := make(chan forwardResult)
+
+	for _, remote := range client.streams {
+		go remote.forwardCommand(c, cmd, logger)
+	}
+
+	f := <-c
+	return f.result, f.err
 }
 
 func (client *Client) forwardCommands() {
