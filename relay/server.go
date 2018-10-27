@@ -93,6 +93,7 @@ func (remote *remote) forwardCommand(c chan<- forwardResult, cmd interface{}, lo
 		res, err := stream.sendReceive(cmd, logger)
 		c <- forwardResult{result: res, err: err}
 	}
+	remote.releaseDownStream(stream)
 }
 
 func (stream *downStream) sendReceive(cmd interface{}, logger *zap.Logger) (interface{}, error) {
