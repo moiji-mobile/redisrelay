@@ -113,15 +113,35 @@ func (stream *downStream) sendReceive(cmd interface{}, logger *zap.Logger) (inte
 	return res, err
 }
 
+func selectResult(results []forwardResult, errors []forwardResult) (interface{}, error) {
+	// Pick any success and then any error.
+	if len(results) > 0 {
+		return results[0].result, results[0].err
+	}
+	if len(errors) > 0 {
+		return errors[0].result, errors[0].err
+	}
+	return nil, fmt.Errorf("Neither success nor failure. Reporting as failed")
+}
+
 func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (interface{}, error) {
 	c := make(chan forwardResult, len(client.remotes))
+	failures := make([]forwardResult, 0, len(client.remotes))
+	results := make([]forwardResult, 0, len(client.remotes))
 
 	for _, remote := range client.remotes {
 		go remote.forwardCommand(c, cmd, logger)
 	}
 
-	f := <-c
-	return f.result, f.err
+	for _, _ = range client.remotes {
+		f := <-c
+		if f.err != nil {
+			failures = append(failures, f)
+		} else {
+			results = append(results, f)
+		}
+	}
+	return selectResult(results, failures)
 }
 
 func (client *Client) forwardCommands() {
@@ -158,7 +178,7 @@ func handleConnection(conn net.Conn, s *Server) {
 		writer: NewWriter(conn)}
 
 	client.remotes = make([]remote, 0)
-	for range []int{1,2} {
+	for range []int{1, 2} {
 		r := remote{
 			logger:  s.logger,
 			network: "tcp",
