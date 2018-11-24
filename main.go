@@ -34,7 +34,8 @@ func main() {
 	fmt.Printf("Using config: %#v\n", appOpts)
 	server, err := relay.NewServer(&appOpts)
 	if err != nil {
-		fmt.Println("Fooo")
+		fmt.Printf("Failed to start: %v\n", err)
+		return
 	}
 	server.Run()
 }
