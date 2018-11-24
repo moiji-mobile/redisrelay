@@ -43,6 +43,10 @@ type forwardResult struct {
 }
 
 func NewServer(opt *ServerOptions) (*Server, error) {
+	if len(opt.RemoteAddresses) == 0 {
+		return nil, fmt.Errorf("Need to have at least one downstream: %v", len(opt.RemoteAddresses))
+	}
+
 	ln, err := net.Listen("tcp", opt.BindAddress)
 	if err != nil {
 		return nil, err
