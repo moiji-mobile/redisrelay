@@ -9,6 +9,7 @@ import (
 type Server struct {
 	listener net.Listener
 	logger   *zap.Logger
+	options  *ServerOptions
 }
 
 // A pair of reader/writer for a downstream connection
@@ -48,13 +49,14 @@ func NewServer(opt *ServerOptions) (*Server, error) {
 	}
 
 	s := Server{listener: ln}
+	s.options = opt
 	s.logger = opt.Logger
 	return &s, nil
 }
 
 // First thing that might be connection pooling..
 func (remote *remote) getDownStream() (*downStream, error) {
-	remoteConn, err := net.Dial("tcp", "localhost:6379")
+	remoteConn, err := net.Dial(remote.network, remote.address)
 	if err != nil {
 		remote.logger.Error("Can't connect to real Redis", zap.Error(err))
 		return nil, err
@@ -177,11 +179,11 @@ func handleConnection(conn net.Conn, s *Server) {
 		writer: NewWriter(conn)}
 
 	client.remotes = make([]remote, 0)
-	for range []int{1, 2} {
+	for _, addr := range s.options.RemoteAddresses {
 		r := remote{
 			logger:  s.logger,
 			network: "tcp",
-			address: "localhost:6379"}
+			address: addr}
 		client.remotes = append(client.remotes, r)
 	}
 	client.forwardCommands()
