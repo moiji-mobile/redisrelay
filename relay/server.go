@@ -42,9 +42,7 @@ type forwardResult struct {
 }
 
 func NewServer(opt *ServerOptions) (*Server, error) {
-	opt.init()
-
-	ln, err := net.Listen("tcp", opt.Address)
+	ln, err := net.Listen("tcp", opt.BindAddress)
 	if err != nil {
 		return nil, err
 	}

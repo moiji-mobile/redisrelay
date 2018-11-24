@@ -5,16 +5,17 @@ import (
 )
 
 type ServerOptions struct {
-	Address string // defaults to ":8081"
-	Logger  *zap.Logger
+	BindAddress     string   `config:"bind_address"` // defaults to ":8081"
+	RemoteAddresses []string `config:"remote_addresses"`
+	Logger          *zap.Logger
 }
 
-func (o *ServerOptions) init() {
-	if o.Address == "" {
-		o.Address = ":8081"
-	}
+func DefaultOptions() ServerOptions {
+	logger, _ := zap.NewDevelopment()
 
-	if o.Logger == nil {
-		o.Logger, _ = zap.NewDevelopment()
+	var defaultOptions = ServerOptions{
+		BindAddress: ":8081",
+		Logger:      logger,
 	}
+	return defaultOptions
 }

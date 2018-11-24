@@ -1,0 +1,4 @@
+bind_address: :8080 
+remote_addresses:
+  - localhost:6379
+  - localhost:6380
