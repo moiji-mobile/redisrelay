@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"net"
+	"time"
 )
 
 type Server struct {
@@ -46,6 +47,11 @@ func NewServer(opt *ServerOptions) (*Server, error) {
 	if len(opt.RemoteAddresses) == 0 {
 		return nil, fmt.Errorf("Need to have at least one downstream: %v", len(opt.RemoteAddresses))
 	}
+	TimeOut, err := time.ParseDuration(opt.TimeOut_base)
+	if err != nil {
+		return nil, err
+	}
+	opt.TimeOut = TimeOut
 
 	ln, err := net.Listen("tcp", opt.BindAddress)
 	if err != nil {
@@ -138,14 +144,23 @@ func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (int
 		go remote.forwardCommand(c, cmd, logger)
 	}
 
+	// Start the timer after we have queued all requests.
+
+	timeOut := time.NewTimer(client.server.options.TimeOut)
 	for _, _ = range client.remotes {
-		f := <-c
-		if f.err != nil {
-			failures = append(failures, f)
-		} else {
-			results = append(results, f)
+		select {
+			case <- timeOut.C:
+				client.server.logger.Error("Time out getting a request")
+				return selectResult(results, failures)
+			case f := <-c:
+				if f.err != nil {
+					failures = append(failures, f)
+				} else {
+					results = append(results, f)
+				}
 		}
 	}
+	timeOut.Stop()
 	return selectResult(results, failures)
 }
 
