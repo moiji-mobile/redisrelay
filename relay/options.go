@@ -8,8 +8,9 @@ import (
 type ServerOptions struct {
 	BindAddress     string   `config:"bind_address"` // defaults to ":8081"
 	RemoteAddresses []string `config:"remote_addresses"`
-	TimeOut_base	string   `config:"request_timeout"`
-	TimeOut		time.Duration
+	TimeOut_base    string   `config:"request_timeout"`
+	MinSuccess      int      `config:"min_success"`
+	TimeOut         time.Duration
 	Logger          *zap.Logger
 }
 

@@ -124,15 +124,15 @@ func (stream *downStream) sendReceive(cmd interface{}, logger *zap.Logger) (inte
 	return res, err
 }
 
-func selectResult(results []forwardResult, errors []forwardResult) (interface{}, error) {
+func (client *Client) selectResult(results []forwardResult, errors []forwardResult) (interface{}, error) {
 	// Pick any success and then any error.
-	if len(results) > 0 {
+	if len(results) > client.server.options.MinSuccess {
 		return results[0].result, results[0].err
 	}
 	if len(errors) > 0 {
 		return errors[0].result, errors[0].err
 	}
-	return nil, fmt.Errorf("Neither success nor failure. Reporting as failed")
+	return nil, fmt.Errorf("Not enough success nor failure. Reporting as failed")
 }
 
 func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (interface{}, error) {
@@ -149,19 +149,19 @@ func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (int
 	timeOut := time.NewTimer(client.server.options.TimeOut)
 	for _, _ = range client.remotes {
 		select {
-			case <- timeOut.C:
-				client.server.logger.Error("Time out getting a request")
-				return selectResult(results, failures)
-			case f := <-c:
-				if f.err != nil {
-					failures = append(failures, f)
-				} else {
-					results = append(results, f)
-				}
+		case <-timeOut.C:
+			client.server.logger.Error("Time out getting a request")
+			return client.selectResult(results, failures)
+		case f := <-c:
+			if f.err != nil {
+				failures = append(failures, f)
+			} else {
+				results = append(results, f)
+			}
 		}
 	}
 	timeOut.Stop()
-	return selectResult(results, failures)
+	return client.selectResult(results, failures)
 }
 
 func (client *Client) forwardCommands() {
