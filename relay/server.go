@@ -31,16 +31,21 @@ type remote struct {
 
 // A single client.
 type Client struct {
-	server  *Server
+	options *ServerOptions
+	logger  *zap.Logger
 	reader  *Reader
 	writer  *Writer
 	remotes []remote
 }
 
 // A result coming from downstream connection
-type forwardResult struct {
+type ForwardResult struct {
 	result interface{}
 	err    error
+}
+
+func NewClient(options *ServerOptions, logger *zap.Logger) *Client {
+	return &Client{options: options, logger: logger}
 }
 
 func NewServer(opt *ServerOptions) (*Server, error) {
@@ -95,13 +100,13 @@ func (remote *remote) releaseDownStream(stream *downStream) {
 	stream.conn.Close()
 }
 
-func (remote *remote) forwardCommand(c chan<- forwardResult, cmd interface{}, logger *zap.Logger) {
+func (remote *remote) forwardCommand(c chan<- ForwardResult, cmd interface{}, logger *zap.Logger) {
 	stream, err := remote.getDownStream()
 	if err != nil {
-		c <- forwardResult{result: nil, err: err}
+		c <- ForwardResult{result: nil, err: err}
 	} else {
 		res, err := stream.sendReceive(cmd, logger)
-		c <- forwardResult{result: res, err: err}
+		c <- ForwardResult{result: res, err: err}
 	}
 	remote.releaseDownStream(stream)
 }
@@ -124,9 +129,9 @@ func (stream *downStream) sendReceive(cmd interface{}, logger *zap.Logger) (inte
 	return res, err
 }
 
-func (client *Client) selectResult(results []forwardResult, errors []forwardResult) (interface{}, error) {
+func (client *Client) SelectResult(results []ForwardResult, errors []ForwardResult) (interface{}, error) {
 	// Pick any success and then any error.
-	if len(results) > client.server.options.MinSuccess {
+	if len(results) > client.options.MinSuccess {
 		return results[0].result, results[0].err
 	}
 	if len(errors) > 0 {
@@ -136,9 +141,9 @@ func (client *Client) selectResult(results []forwardResult, errors []forwardResu
 }
 
 func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (interface{}, error) {
-	c := make(chan forwardResult, len(client.remotes))
-	failures := make([]forwardResult, 0, len(client.remotes))
-	results := make([]forwardResult, 0, len(client.remotes))
+	c := make(chan ForwardResult, len(client.remotes))
+	failures := make([]ForwardResult, 0, len(client.remotes))
+	results := make([]ForwardResult, 0, len(client.remotes))
 
 	for _, remote := range client.remotes {
 		go remote.forwardCommand(c, cmd, logger)
@@ -146,12 +151,12 @@ func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (int
 
 	// Start the timer after we have queued all requests.
 
-	timeOut := time.NewTimer(client.server.options.TimeOut)
+	timeOut := time.NewTimer(client.options.TimeOut)
 	for _, _ = range client.remotes {
 		select {
 		case <-timeOut.C:
-			client.server.logger.Error("Time out getting a request")
-			return client.selectResult(results, failures)
+			client.logger.Error("Time out getting a request")
+			return client.SelectResult(results, failures)
 		case f := <-c:
 			if f.err != nil {
 				failures = append(failures, f)
@@ -161,7 +166,7 @@ func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (int
 		}
 	}
 	timeOut.Stop()
-	return client.selectResult(results, failures)
+	return client.SelectResult(results, failures)
 }
 
 func (client *Client) forwardCommands() {
@@ -169,20 +174,20 @@ func (client *Client) forwardCommands() {
 		// Get the command
 		cmd, err := client.reader.ParseCommand()
 		if err != nil {
-			client.server.logger.Error("Can't parse command", zap.Error(err))
+			client.logger.Error("Can't parse command", zap.Error(err))
 			return
 		}
 
-		res, err := forwardDownstream(client, cmd, client.server.logger)
+		res, err := forwardDownstream(client, cmd, client.logger)
 		if err != nil {
-			client.server.logger.Error("Can't parse command", zap.Error(err))
+			client.logger.Error("Can't parse command", zap.Error(err))
 			return
 		}
 
 		// Write the response
 		err = client.writer.Write(res)
 		if err != nil {
-			client.server.logger.Error("Can't forward response", zap.Error(err))
+			client.logger.Error("Can't forward response", zap.Error(err))
 			return
 		}
 		client.writer.Flush()
@@ -193,9 +198,10 @@ func handleConnection(conn net.Conn, s *Server) {
 	defer conn.Close()
 
 	client := Client{
-		server: s,
-		reader: NewReader(conn, s.logger),
-		writer: NewWriter(conn)}
+		options: s.options,
+		logger:  s.logger,
+		reader:  NewReader(conn, s.logger),
+		writer:  NewWriter(conn)}
 
 	client.remotes = make([]remote, 0)
 	for _, addr := range s.options.RemoteAddresses {
