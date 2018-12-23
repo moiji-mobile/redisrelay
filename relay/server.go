@@ -98,7 +98,8 @@ func (remote *remote) getDownStream() (*downStream, error) {
 
 // Return it to the pool
 func (remote *remote) releaseDownStream(stream *downStream) {
-	// Just close it now as streams are not tracked..
+	// TODO(zecke): Add proper pool handling. This will require to re-try in case
+	// of a connection failure.
 	stream.conn.Close()
 }
 
