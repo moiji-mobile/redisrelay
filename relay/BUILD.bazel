@@ -1,0 +1,25 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "options.go",
+        "reader.go",
+        "server.go",
+        "types.go",
+        "writer.go",
+    ],
+    importpath = "github.com/moiji-mobile/redisrelay/relay",
+    visibility = ["//visibility:public"],
+    deps = ["@org_uber_go_zap//:go_default_library"],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "reader_test.go",
+        "server_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = ["@org_uber_go_zap//:go_default_library"],
+)
