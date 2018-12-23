@@ -136,7 +136,7 @@ func (stream *downStream) sendReceive(cmd interface{}, logger *zap.Logger) (inte
 
 func (client *Client) SelectResult(results []ForwardResult, errors []ForwardResult) (interface{}, error) {
 	// Pick any success and then any error.
-	if uint32(len(results)) > client.options.GetMinSuccess() {
+	if uint32(len(results)) >= client.options.GetMinSuccess() {
 		return results[0].result, results[0].err
 	}
 	if len(errors) > 0 {
