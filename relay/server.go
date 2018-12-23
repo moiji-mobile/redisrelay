@@ -151,7 +151,8 @@ func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (int
 	results := make([]ForwardResult, 0, len(client.remotes))
 
 	for _, remote := range client.remotes {
-		go remote.forwardCommand(c, cmd, logger)
+		var aremote = remote
+		aremote.forwardCommand(c, cmd, logger)
 	}
 
 	// Start the timer after we have queued all requests.
