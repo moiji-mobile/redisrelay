@@ -100,7 +100,9 @@ func (remote *remote) getDownStream() (*downStream, error) {
 func (remote *remote) releaseDownStream(stream *downStream) {
 	// TODO(zecke): Add proper pool handling. This will require to re-try in case
 	// of a connection failure.
-	stream.conn.Close()
+	if stream != nil && stream.conn != nil {
+		stream.conn.Close()
+	}
 }
 
 func (remote *remote) forwardCommand(c chan<- ForwardResult, cmd interface{}, logger *zap.Logger) {
