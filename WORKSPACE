@@ -1,4 +1,5 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 http_archive(
     name = "io_bazel_rules_go",
     urls = ["https://github.com/bazelbuild/rules_go/releases/download/0.16.5/rules_go-0.16.5.tar.gz"],
@@ -16,12 +17,15 @@ load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies", "go_repository")
 gazelle_dependencies()
 
 # dependencies
+
+# Config handling
 go_repository(
     name = "com_github_elastic_go_ucfg",
     commit = "92d43887f91851c9936621665af7f796f4d03412",  # Version as of 2018-12-23
     importpath = "github.com/elastic/go-ucfg",
 )
 
+# Logging and dependencies
 go_repository(
     name = "org_uber_go_zap",
     commit = "ff33455a0e382e8a81d14dd7c922020b6b5e7982",  # Version 1.9.1 as of 2018-12-23

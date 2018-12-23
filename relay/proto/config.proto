@@ -1,0 +1,12 @@
+// Definition of the configuration
+
+syntax = "proto2";
+
+import "google/protobuf/duration.proto";
+
+message ConfigProtoP {
+	optional string bind_address = 1 [default=":8080"];
+	repeated string remote_addresses = 2;
+	optional google.protobuf.Duration request_timeout = 3;
+	optional uint32 min_success = 4 [default=1];
+}
