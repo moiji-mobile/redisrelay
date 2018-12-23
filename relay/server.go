@@ -186,7 +186,7 @@ func (client *Client) forwardCommands() {
 
 		res, err := forwardDownstream(client, cmd, client.logger)
 		if err != nil {
-			client.logger.Error("Can't parse command", zap.Error(err))
+			client.logger.Error("Can't forward command", zap.Error(err))
 			return
 		}
 
