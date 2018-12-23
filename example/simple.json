@@ -1,0 +1,9 @@
+{
+	"bindAddress": ":8080",
+	"remoteAddresses": [
+        "localhost:6379",
+        "localhost:6380"
+	],
+	"requestTimeout": "2s",
+	"minSuccess": 1
+}

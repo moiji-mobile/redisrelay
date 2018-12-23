@@ -2,6 +2,7 @@ package relay
 
 import (
 	"fmt"
+	pb "github.com/golang/protobuf/ptypes"
 	"go.uber.org/zap"
 	"net"
 	"time"
@@ -49,16 +50,17 @@ func NewClient(options *ServerOptions, logger *zap.Logger) *Client {
 }
 
 func NewServer(opt *ServerOptions) (*Server, error) {
-	if len(opt.RemoteAddresses) == 0 {
-		return nil, fmt.Errorf("Need to have at least one downstream: %v", len(opt.RemoteAddresses))
+	if len(opt.GetRemoteAddresses()) == 0 {
+		return nil, fmt.Errorf("Need to have at least one downstream: %v", len(opt.GetRemoteAddresses()))
 	}
-	TimeOut, err := time.ParseDuration(opt.TimeOut_base)
+
+	TimeOut, err := pb.Duration(opt.GetRequestTimeout())
 	if err != nil {
 		return nil, err
 	}
 	opt.TimeOut = TimeOut
 
-	ln, err := net.Listen("tcp", opt.BindAddress)
+	ln, err := net.Listen("tcp", opt.GetBindAddress())
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +133,7 @@ func (stream *downStream) sendReceive(cmd interface{}, logger *zap.Logger) (inte
 
 func (client *Client) SelectResult(results []ForwardResult, errors []ForwardResult) (interface{}, error) {
 	// Pick any success and then any error.
-	if len(results) > client.options.MinSuccess {
+	if uint32(len(results)) > client.options.GetMinSuccess() {
 		return results[0].result, results[0].err
 	}
 	if len(errors) > 0 {
@@ -204,7 +206,7 @@ func handleConnection(conn net.Conn, s *Server) {
 		writer:  NewWriter(conn)}
 
 	client.remotes = make([]remote, 0)
-	for _, addr := range s.options.RemoteAddresses {
+	for _, addr := range s.options.GetRemoteAddresses() {
 		r := remote{
 			logger:  s.logger,
 			network: "tcp",

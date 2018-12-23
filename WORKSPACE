@@ -20,9 +20,9 @@ gazelle_dependencies()
 
 # Config handling
 go_repository(
-    name = "com_github_elastic_go_ucfg",
-    commit = "92d43887f91851c9936621665af7f796f4d03412",  # Version as of 2018-12-23
-    importpath = "github.com/elastic/go-ucfg",
+    name = "com_github_golang_protobuf",
+    commit = "882cf97a83ad205fd22af574246a3bc647d7a7d2",  # v3.6.1
+    importpath = "github.com/golang/protobuf",
 )
 
 # Logging and dependencies

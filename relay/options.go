@@ -1,25 +1,21 @@
 package relay
 
 import (
+	"github.com/moiji-mobile/redisrelay/relay/proto"
 	"go.uber.org/zap"
 	"time"
 )
 
 type ServerOptions struct {
-	BindAddress     string   `config:"bind_address"` // defaults to ":8081"
-	RemoteAddresses []string `config:"remote_addresses"`
-	TimeOut_base    string   `config:"request_timeout"`
-	MinSuccess      int      `config:"min_success"`
-	TimeOut         time.Duration
-	Logger          *zap.Logger
+	proto.ConfigProtoP
+	Logger  *zap.Logger
+	TimeOut time.Duration
 }
 
 func DefaultOptions() ServerOptions {
 	logger, _ := zap.NewDevelopment()
 
 	var defaultOptions = ServerOptions{
-		BindAddress: ":8081",
-		Logger:      logger,
-	}
+		Logger: logger}
 	return defaultOptions
 }

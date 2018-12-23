@@ -10,9 +10,9 @@ go_library(
     importpath = "github.com/moiji-mobile/redisrelay",
     visibility = ["//visibility:private"],
     deps = [
+        "//relay/proto:go_default_library",
         "//relay:go_default_library",
-        "@com_github_elastic_go_ucfg//:go_default_library",
-        "@com_github_elastic_go_ucfg//yaml:go_default_library",
+        "@com_github_golang_protobuf//jsonpb:go_default_library_gen",
     ],
 )
 

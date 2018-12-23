@@ -21,7 +21,8 @@ func NewDummyClient() (*relay.ServerOptions, *relay.Client) {
 
 func TestClient_testSelectResult_success(t *testing.T) {
 	options, client := NewDummyClient()
-	options.MinSuccess = 2
+	var minSuccess = uint32(2)
+	options.MinSuccess = &minSuccess
 
 	errors := make([]relay.ForwardResult, 10)
 	success := make([]relay.ForwardResult, 2)
@@ -35,7 +36,8 @@ func TestClient_testSelectResult_success(t *testing.T) {
 
 func TestClient_testSelectResult_notEnoughSuccess(t *testing.T) {
 	options, client := NewDummyClient()
-	options.MinSuccess = 2
+	var minSuccess = uint32(2)
+	options.MinSuccess = &minSuccess
 
 	errors := make([]relay.ForwardResult, 0)
 	success := make([]relay.ForwardResult, 1)

@@ -1,6 +1,0 @@
-bind_address: :8080 
-remote_addresses:
-  - localhost:6379
-  - localhost:6380
-request_timeout: 2s
-min_success: 1

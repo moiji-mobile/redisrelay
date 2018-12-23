@@ -3,14 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/elastic/go-ucfg"
-	"github.com/elastic/go-ucfg/yaml"
 	"github.com/moiji-mobile/redisrelay/relay"
+	//"github.com/moiji-mobile/redisrelay/relay/proto"
+	"github.com/golang/protobuf/jsonpb"
 	"os"
 )
 
 var (
-	configPath = flag.String("config_path", "config.yml", "The path to the config file")
+	configPath = flag.String("config_path", "config.json", "The path to the config file")
 )
 
 func main() {
@@ -19,14 +19,16 @@ func main() {
 
 	// Parse the options
 	appOpts := relay.DefaultOptions()
-	config, err := yaml.NewConfigWithFile(*configPath, ucfg.PathSep("."))
+	//appOpts := proto.ConfigProtoP{}
+
+	r, err := os.Open(*configPath)
 	if err != nil {
-		fmt.Printf("%v\n", err)
+		fmt.Printf("Failed to open: %v\n", err)
 		os.Exit(1)
 	}
-	err = config.Unpack(&appOpts)
+	err = jsonpb.Unmarshal(r, &appOpts.ConfigProtoP)
 	if err != nil {
-		fmt.Printf("%v\n", err)
+		fmt.Printf("Failed to parse: %v\n", err)
 		os.Exit(1)
 	}
 
