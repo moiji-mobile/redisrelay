@@ -145,7 +145,35 @@ func (client *Client) SelectResult(results []ForwardResult, errors []ForwardResu
 	return nil, fmt.Errorf("Not enough success nor failure. Reporting as failed")
 }
 
+func DetermineResponseWillHaveVersion(cmd interface{}) bool {
+	// Is this an array?
+	arr, valid := cmd.([]interface{})
+	if !valid {
+		return false
+	}
+
+	// Does it hold enough elements?
+	if len(arr) != 2 {
+		return false
+	}
+
+	// Is the first one HGETALL?
+	name, valid := arr[0].(*[]byte)
+	if !valid {
+		return false
+	}
+
+	if string(*name) != "HGETALL" {
+		return false
+	}
+
+	return true
+}
+
 func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (interface{}, error) {
+	// Is this a request that will yield a response with a version inside?
+	resp_has_ver := DetermineResponseWillHaveVersion(cmd)
+
 	c := make(chan ForwardResult, len(client.remotes))
 	failures := make([]ForwardResult, 0, len(client.remotes))
 	results := make([]ForwardResult, 0, len(client.remotes))
