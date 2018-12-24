@@ -1,0 +1,22 @@
+language: go
+go:
+  - "1.x"
+  - "1.10.x"
+  - "1.11.x"
+
+install:
+  - wget -O install.sh "https://github.com/bazelbuild/bazel/releases/download/0.21.0/bazel-0.21.0-installer-linux-x86_64.sh"
+  - chmod +x ./install.sh
+  - ./install.sh --user
+  - rm -f install.sh
+
+script:
+  - sed -i s,'go_register_toolchains()','go_register_toolchains(go_version = "host")', WORKSPACE
+  - bazel build --config=ci ...
+  - bazel test --config=ci ...
+
+#cache:
+#  directories:
+#    - $HOME/.bzrepos
+#    - $HOME/.cache/bazel
+#  timeout: 500
