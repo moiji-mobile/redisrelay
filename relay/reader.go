@@ -139,3 +139,15 @@ func NewReader(conn io.Reader, logger *zap.Logger) *Reader {
 	r.logger = logger
 	return &r
 }
+
+func GetString(data interface{}) *string {
+	if v, ok := data.([]uint8); ok {
+		name := string(v)
+		return &name
+	}
+	if v, ok := data.(*[]uint8); ok {
+		name := string(*v)
+		return &name
+	}
+	return nil
+}

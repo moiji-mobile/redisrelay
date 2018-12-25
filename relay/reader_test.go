@@ -108,3 +108,27 @@ func TestParseData_Error(t *testing.T) {
 	}
 	testRoundTrip(res, inp, t)
 }
+
+func TestGetString_String(t *testing.T) {
+	inp := []byte{'s', 't', 'r', 'i', 'n', 'g'}
+	inp_ptr := &inp
+
+	// Positive tests
+	res := relay.GetString(inp)
+	if *res != string(inp) {
+		t.Errorf("Couldn't extract string. Got: %#v", res)
+	}
+	res = relay.GetString(inp_ptr)
+	if *res != string(inp) {
+		t.Errorf("Couldn't extract string. Got: %#v", res)
+	}
+
+	res = relay.GetString(nil)
+	if res != nil {
+		t.Errorf("Expected a nil ptr")
+	}
+	res = relay.GetString(3)
+	if res != nil {
+		t.Errorf("Expected a nil ptr")
+	}
+}
