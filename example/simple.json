@@ -5,5 +5,6 @@
         "localhost:6380"
 	],
 	"requestTimeout": "2s",
-	"minSuccess": 1
+	"minSuccess": 1,
+	"version_field_name": "version"
 }

@@ -5,6 +5,7 @@ import (
 	pb "github.com/golang/protobuf/ptypes"
 	"go.uber.org/zap"
 	"net"
+	"strconv"
 	"time"
 )
 
@@ -43,6 +44,14 @@ type Client struct {
 type ForwardResult struct {
 	result interface{}
 	err    error
+}
+
+func (forward *ForwardResult) SetResultForTesting(result interface{}) {
+	forward.result = result
+}
+
+func (forward ForwardResult) GetResultForTesting() (result interface{}) {
+	return forward.result
 }
 
 func NewClient(options *ServerOptions, logger *zap.Logger) *Client {
@@ -134,10 +143,61 @@ func (stream *downStream) sendReceive(cmd interface{}, logger *zap.Logger) (inte
 	return res, err
 }
 
-func (client *Client) SelectResult(results []ForwardResult, errors []ForwardResult) (interface{}, error) {
+func FindVersion(result interface{}, version string) int64 {
+	// Is this an array?
+	arr, valid := result.([]interface{})
+	if !valid {
+		return 0
+	}
+
+	// An array of alternating key/value. Find the key and then
+	// cast/extract the value.
+	for i := 0; i < len(arr); i += 2 {
+		name := GetString(arr[i])
+		if name != nil && *name == version && i+1 < len(arr) {
+			if v, ok := arr[i+1].(int64); ok {
+				return v
+			}
+			if v, ok := arr[i+1].([]byte); ok {
+				v, err := strconv.ParseInt(string(v), 10, 64)
+				if err == nil {
+					return v
+				}
+			}
+			if v, ok := arr[i+1].(*[]byte); ok {
+				v, err := strconv.ParseInt(string(*v), 10, 64)
+				if err == nil {
+					return v
+				}
+			}
+			return 0
+		}
+	}
+	return 0
+}
+
+func (client *Client) SelectBestResult(results []ForwardResult, resp_has_ver bool) (interface{}, error) {
+	if !resp_has_ver {
+		return results[0].result, results[0].err
+	}
+
+	var selected ForwardResult
+	var max *int64
+
+	for _, result := range results {
+		dataVersion := FindVersion(result.result, client.options.GetVersionFieldName())
+		if max == nil || dataVersion > *max {
+			selected = result
+			max = &dataVersion
+		}
+	}
+	return selected.result, selected.err
+}
+
+func (client *Client) SelectResult(results []ForwardResult, errors []ForwardResult, resp_has_ver bool) (interface{}, error) {
 	// Pick any success and then any error.
 	if uint32(len(results)) >= client.options.GetMinSuccess() {
-		return results[0].result, results[0].err
+		return client.SelectBestResult(results, resp_has_ver)
 	}
 	if len(errors) > 0 {
 		return errors[0].result, errors[0].err
@@ -190,7 +250,7 @@ func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (int
 		select {
 		case <-timeOut.C:
 			client.logger.Error("Time out getting a request")
-			return client.SelectResult(results, failures)
+			return client.SelectResult(results, failures, resp_has_ver)
 		case f := <-c:
 			if f.err != nil {
 				failures = append(failures, f)
@@ -200,7 +260,7 @@ func forwardDownstream(client *Client, cmd interface{}, logger *zap.Logger) (int
 		}
 	}
 	timeOut.Stop()
-	return client.SelectResult(results, failures)
+	return client.SelectResult(results, failures, resp_has_ver)
 }
 
 func (client *Client) forwardCommands() {

@@ -9,4 +9,5 @@ message ConfigProtoP {
 	repeated string remote_addresses = 2;
 	optional google.protobuf.Duration request_timeout = 3;
 	optional uint32 min_success = 4 [default=1];
+	optional string version_field_name = 5;
 }
